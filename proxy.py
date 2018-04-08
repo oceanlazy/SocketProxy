@@ -1,3 +1,4 @@
+import os
 import select
 import socket
 import socketserver
@@ -8,13 +9,11 @@ from threading import Thread
 
 def proxy_factory():
     class Proxy(http.server.SimpleHTTPRequestHandler):
+        incoming_data_path = 'incoming_data.txt'
+
         def send_headers_ok(self):
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
-            self.end_headers()
-
-        def send_headers_bad(self, msg=None):
-            self.send_response(400, msg)
             self.end_headers()
 
         def get_data(self):
@@ -90,19 +89,25 @@ def proxy_factory():
                 self.send_headers_ok()
                 print('Incoming data: "{}"'.format(data.decode()))
             else:
-                self.send_headers_bad('Bad Request: Empty data')
+                self.send_header('Empty data', 204)
 
         def do_PUT(self):
             data = self.get_data()
             if data:
                 self.send_headers_ok()
                 print('Incoming data: "{}"'.format(data.decode()))
+                with open(self.incoming_data_path, 'wb') as f:
+                    f.write(data)
             else:
-                self.send_headers_bad('Bad Request: Empty data')
+                self.send_header('Empty data', 204)
 
         def do_DELETE(self):
-            self.send_response(501)
-            self.end_headers()
+            if os.path.isfile(self.incoming_data_path):
+                os.remove(self.incoming_data_path)
+                self.send_headers_ok()
+            else:
+                self.send_header('Resourse ot found', 204)
+                self.end_headers()
 
         def do_CONNECT(self):
             client_conn = self.get_client_conn()
