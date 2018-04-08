@@ -8,6 +8,22 @@ from threading import Thread
 
 def proxy_factory():
     class Proxy(http.server.SimpleHTTPRequestHandler):
+        def send_headers_ok(self):
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+
+        def send_headers_bad(self, msg=None):
+            self.send_response(400, msg)
+            self.end_headers()
+
+        def get_data(self):
+            header_value = self.headers['Content-Length']
+            if header_value:
+                data_length = int(header_value)
+                if data_length:
+                    data = self.rfile.read(int(header_value))
+                    return data
 
         def get_client_conn(self):
             client_conn = socket.socket()
@@ -58,20 +74,30 @@ def proxy_factory():
             self.do_CONNECT()
 
         def do_HEAD(self):
-            super().do_HEAD()
+            self.send_headers_ok()
 
         def do_GET(self):
-            super().do_GET()
+            self.send_headers_ok()
+            self.wfile.write(b"<html><body><h1>This is proxy server.</h1></body></html>")
 
         def do_POST(self):
-            self.send_response(501)
-            self.end_headers()
+            data = self.get_data()
+            if data:
+                self.send_headers_ok()
+                print('Incoming data: "{}"'.format(data.decode()))
+            else:
+                self.send_headers_bad('Bad Request: Empty data')
 
         def do_PUT(self):
-            self.send_response(501)
-            self.end_headers()
+            data = self.get_data()
+            if data:
+                self.send_headers_ok()
+                print('Incoming data: "{}"'.format(data.decode()))
+            else:
+                self.send_headers_bad('Bad Request: Empty data')
 
         def do_DELETE(self):
+            print('Connection {}: DELETE from {}:{}'.format(self.connection.fileno(), *self.connection.getpeername()))
             self.send_response(501)
             self.end_headers()
 
