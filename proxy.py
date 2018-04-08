@@ -8,6 +8,7 @@ from threading import Thread
 
 def proxy_factory():
     class Proxy(http.server.SimpleHTTPRequestHandler):
+
         def get_client_conn(self):
             client_conn = socket.socket()
             host_port_split = self.path.split(':')
@@ -52,6 +53,10 @@ def proxy_factory():
                     else:
                         return
 
+        def redirect(self, url):
+            self.path = url
+            self.do_CONNECT()
+
         def do_HEAD(self):
             super().do_HEAD()
 
@@ -72,6 +77,9 @@ def proxy_factory():
 
         def do_CONNECT(self):
             client_conn = self.get_client_conn()
+            if 'google.com' in self.path:
+                self.redirect('www.bing.com:443')
+                return
             try:
                 if client_conn:
                     self.log_request(200)
@@ -89,7 +97,7 @@ class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     pass
 
 
-class ProxyBox:
+class Proxy:
     def __init__(self):
         self.port = 1234
         self.base_url = 'localhost'
@@ -114,5 +122,5 @@ class ProxyBox:
         self.server.server_close()
 
 
-box = ProxyBox()
-box.start()
+proxy = Proxy()
+proxy.start()

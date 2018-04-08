@@ -13,5 +13,5 @@ Set as default proxy for your browser, then run:
 $ python proxy.py
 ```
 ### Todos
- - Create a redirect option.
- - Implement other methods
+ - Modify a redirect option;
+ - Implement other methods.
