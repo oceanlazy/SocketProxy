@@ -106,7 +106,7 @@ def proxy_factory():
                 os.remove(self.incoming_data_path)
                 self.send_headers_ok()
             else:
-                self.send_header('Resourse ot found', 204)
+                self.send_header('Resourse not found', 204)
                 self.end_headers()
 
         def do_CONNECT(self):
