@@ -47,7 +47,11 @@ def proxy_factory():
                     return
                 if input_ready:
                     for item in input_ready:
-                        data = item.recv(8192)
+                        try:
+                            data = item.recv(8192)
+                        except ConnectionResetError:
+                            print('Connection {}: Closed by peer'.format(client_conn.fileno()))
+                            return
                         if data:
                             if item is client_conn:
                                 local_conn = self.connection
@@ -77,8 +81,8 @@ def proxy_factory():
             self.send_headers_ok()
 
         def do_GET(self):
-            self.send_headers_ok()
-            self.wfile.write(b"<html><body><h1>This is proxy server.</h1></body></html>")
+            self.send_response(501)
+            self.end_headers()
 
         def do_POST(self):
             data = self.get_data()
@@ -97,7 +101,6 @@ def proxy_factory():
                 self.send_headers_bad('Bad Request: Empty data')
 
         def do_DELETE(self):
-            print('Connection {}: DELETE from {}:{}'.format(self.connection.fileno(), *self.connection.getpeername()))
             self.send_response(501)
             self.end_headers()
 
