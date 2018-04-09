@@ -10,7 +10,6 @@ from threading import Thread
 def proxy_factory():
     class Proxy(http.server.SimpleHTTPRequestHandler):
         incoming_data_path = 'incoming_data.txt'
-
         def send_headers_ok(self):
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
@@ -72,13 +71,17 @@ def proxy_factory():
                     else:
                         return
 
-
         def do_HEAD(self):
             self.send_headers_ok()
 
         def do_GET(self):
-            self.send_response(501)
-            self.end_headers()
+            if 'google.org' in self.path:
+                self.send_response(301)
+                self.send_header("Location", "http://www.bing.com")
+                self.end_headers()
+            else:
+                self.send_response(501)
+                self.end_headers()
 
         def do_POST(self):
             data = self.get_data()
@@ -107,8 +110,6 @@ def proxy_factory():
                 self.end_headers()
 
         def do_CONNECT(self):
-            if 'google.com' in self.path:
-                self.path = 'www.bing.com:443'
             outer_conn = self.get_outer_conn()
             try:
                 if outer_conn:
@@ -143,7 +144,7 @@ class Proxy:
     def start(self):
         self.server_thread.start()
         print('Proxy started on http://{}:{}'.format(self.base_url, self.port))
-        sleep(60)
+        sleep(30)
         print('Proxy closing by timeout')
         self.shutdown()
 
