@@ -24,53 +24,54 @@ def proxy_factory():
                     data = self.rfile.read(data_length)
                     return data
 
-        def get_client_conn(self):
-            client_conn = socket.socket()
+        def get_outer_conn(self):
+            outer_conn = socket.socket()
             host_port_split = self.path.split(':')
             host_port = host_port_split[0], int(host_port_split[-1])
             try:
-                print('Connection {}: Started'.format(client_conn.fileno()))
-                client_conn.connect(host_port)
+                print('Connection {}: Started'.format(outer_conn.fileno()))
+                outer_conn.connect(host_port)
             except socket.error:
-                print('Connection {}: Connection failed'.format(client_conn.fileno()))
+                print('Connection {}: Connection failed'.format(outer_conn.fileno()))
                 self.send_error(404)
-            return client_conn
+            return outer_conn
 
-        def send_data_to_hosts(self, client_conn):
-            wait_items = [self.connection, client_conn]
+        def send_data_to_hosts(self, outer_conn):
+            wait_items = [self.connection, outer_conn]
             socket_idle = 0
             while True:
                 input_ready, output_ready, exception_ready = select.select(wait_items, [], wait_items, 1)
                 if exception_ready:
-                    print('Connection {}: Error'.format(client_conn.fileno()))
+                    print('Connection {}: Error'.format(outer_conn.fileno()))
                     return
                 if input_ready:
                     for item in input_ready:
                         try:
                             data = item.recv(8192)
                         except ConnectionResetError:
-                            print('Connection {}: Closed by peer'.format(client_conn.fileno()))
+                            print('Connection {}: Closed by peer'.format(outer_conn.fileno()))
                             return
                         if data:
-                            if item is client_conn:
+                            if item is outer_conn:
                                 local_conn = self.connection
                             else:
-                                local_conn = client_conn
+                                local_conn = outer_conn
                             local_conn.send(data)
                         else:
                             if socket_idle < 10:
                                 sleep(1)
                                 socket_idle += 1
-                                print('Connection {}: Waiting for data'.format(client_conn.fileno()))
+                                print('Connection {}: Waiting for data'.format(outer_conn.fileno()))
                             else:
                                 return
                 else:
                     if socket_idle < 10:
                         sleep(1)
                         socket_idle += 1
-                        print('Connection {}: Waiting for connection'.format(client_conn.fileno()))
+                        print('Connection {}: Waiting for connection'.format(outer_conn.fileno()))
                     else:
                         return
+
 
         def do_HEAD(self):
             self.send_headers_ok()
@@ -108,16 +109,16 @@ def proxy_factory():
         def do_CONNECT(self):
             if 'google.com' in self.path:
                 self.path = 'www.bing.com:443'
-            client_conn = self.get_client_conn()
+            outer_conn = self.get_outer_conn()
             try:
-                if client_conn:
+                if outer_conn:
                     self.log_request(200)
                     self.wfile.write('{} 200 Connection established\nProxy-agent: {}\n\n'
                                      .format(self.protocol_version, self.version_string()).encode())
-                    self.send_data_to_hosts(client_conn)
+                    self.send_data_to_hosts(outer_conn)
             finally:
-                print('Connection {}: Closing'.format(client_conn.fileno()))
-                client_conn.close()
+                print('Connection {}: Closing'.format(outer_conn.fileno()))
+                outer_conn.close()
                 self.connection.close()
     return Proxy
 
