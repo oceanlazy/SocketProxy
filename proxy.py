@@ -21,7 +21,7 @@ def proxy_factory():
             if header_value:
                 data_length = int(header_value)
                 if data_length:
-                    data = self.rfile.read(int(header_value))
+                    data = self.rfile.read(data_length)
                     return data
 
         def get_client_conn(self):
@@ -31,16 +31,16 @@ def proxy_factory():
             try:
                 print('Connection {}: Started'.format(client_conn.fileno()))
                 client_conn.connect(host_port)
-            except socket.error as arg:
+            except socket.error:
                 print('Connection {}: Connection failed'.format(client_conn.fileno()))
-                self.send_error(404, str(arg))
+                self.send_error(404)
             return client_conn
 
         def send_data_to_hosts(self, client_conn):
             wait_items = [self.connection, client_conn]
             socket_idle = 0
             while True:
-                input_ready, output_ready, exception_ready = select.select(wait_items, [], wait_items, .1)
+                input_ready, output_ready, exception_ready = select.select(wait_items, [], wait_items, 1)
                 if exception_ready:
                     print('Connection {}: Error'.format(client_conn.fileno()))
                     return
@@ -71,10 +71,6 @@ def proxy_factory():
                         print('Connection {}: Waiting for connection'.format(client_conn.fileno()))
                     else:
                         return
-
-        def redirect(self, url):
-            self.path = url
-            self.do_CONNECT()
 
         def do_HEAD(self):
             self.send_headers_ok()
@@ -110,10 +106,9 @@ def proxy_factory():
                 self.end_headers()
 
         def do_CONNECT(self):
-            client_conn = self.get_client_conn()
             if 'google.com' in self.path:
-                self.redirect('www.bing.com:443')
-                return
+                self.path = 'www.bing.com:443'
+            client_conn = self.get_client_conn()
             try:
                 if client_conn:
                     self.log_request(200)
@@ -148,7 +143,7 @@ class Proxy:
         self.server_thread.start()
         print('Proxy started on http://{}:{}'.format(self.base_url, self.port))
         sleep(60)
-        print('Proxy exiting by timeout')
+        print('Proxy closing by timeout')
         self.shutdown()
 
     def shutdown(self):
