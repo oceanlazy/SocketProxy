@@ -5,11 +5,17 @@ import socketserver
 import http.server
 from time import sleep
 from threading import Thread
+from urllib.parse import urlparse
+from configparser import ConfigParser
+
+config = ConfigParser()
+config.read('proxy.ini')
 
 
 def proxy_factory():
     class Proxy(http.server.SimpleHTTPRequestHandler):
         incoming_data_path = 'incoming_data.txt'
+
         def send_headers_ok(self):
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
@@ -22,6 +28,21 @@ def proxy_factory():
                 if data_length:
                     data = self.rfile.read(data_length)
                     return data
+
+        def check_for_get_url_redirect(self):
+            scheme = urlparse(self.path).scheme
+            netloc = urlparse(self.path).netloc
+            netloc_without_www = netloc.replace('www.', '')
+            if netloc_without_www in config:
+                return '{}://{}'.format(scheme, config[netloc_without_www]['redirect_to'])
+
+        def check_for_connect_url_redirect(self):
+            netloc = self.path.split(':')[0]
+            netloc_without_www = netloc.replace('www.', '')
+            if netloc_without_www in config:
+                return '{}{}:{}'.format('www.' if 'www.' in self.path else '',
+                                        config[netloc_without_www]['redirect_to'],
+                                        self.path.split(':')[-1])
 
         def get_outer_conn(self):
             outer_conn = socket.socket()
@@ -75,13 +96,18 @@ def proxy_factory():
             self.send_headers_ok()
 
         def do_GET(self):
-            if 'google.org' in self.path:
-                self.send_response(301)
-                self.send_header("Location", "http://www.bing.com")
-                self.end_headers()
-            else:
+            if self.path == 'http://detectportal.firefox.com/success.txt':
                 self.send_response(501)
                 self.end_headers()
+            else:
+                redirect_url = self.check_for_get_url_redirect()
+                if redirect_url:
+                    self.send_response(301)
+                    self.send_header('Location', redirect_url)
+                    self.end_headers()
+                else:
+                    self.send_headers_ok()
+                    self.wfile.write("<html><body><h1>This is proxy server.</h1></body></html>")
 
         def do_POST(self):
             data = self.get_data()
@@ -110,6 +136,9 @@ def proxy_factory():
                 self.end_headers()
 
         def do_CONNECT(self):
+            redirect_url = self.check_for_connect_url_redirect()
+            if redirect_url:
+                self.path = redirect_url
             outer_conn = self.get_outer_conn()
             try:
                 if outer_conn:
@@ -144,7 +173,7 @@ class Proxy:
     def start(self):
         self.server_thread.start()
         print('Proxy started on http://{}:{}'.format(self.base_url, self.port))
-        sleep(30)
+        sleep(60)
         print('Proxy closing by timeout')
         self.shutdown()
 
