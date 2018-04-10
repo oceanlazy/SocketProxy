@@ -107,7 +107,7 @@ def proxy_factory():
                     self.end_headers()
                 else:
                     self.send_headers_ok()
-                    self.wfile.write("<html><body><h1>This is proxy server.</h1></body></html>")
+                    self.wfile.write('<html><body><h1>This is proxy server.</h1></body></html>'.encode())
 
         def do_POST(self):
             data = self.get_data()
