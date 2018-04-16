@@ -1,9 +1,9 @@
 import os
-import select
 import socket
 import socketserver
 import http.server
 from time import sleep
+from select import select
 from threading import Thread
 from urllib.parse import urlparse
 from configparser import ConfigParser
@@ -15,6 +15,7 @@ config.read('proxy.ini')
 def proxy_factory():
     class Proxy(http.server.SimpleHTTPRequestHandler):
         incoming_data_path = 'incoming_data.txt'
+        socket_timeout = 5
 
         def send_headers_ok(self):
             self.send_response(200)
@@ -60,7 +61,7 @@ def proxy_factory():
             wait_items = [self.connection, outer_conn]
             socket_idle = 0
             while True:
-                input_ready, output_ready, exception_ready = select.select(wait_items, [], wait_items, 1)
+                input_ready, output_ready, exception_ready = select(wait_items, [], wait_items, 3)
                 if exception_ready:
                     print('Connection {}: Error'.format(outer_conn.fileno()))
                     return
@@ -68,7 +69,7 @@ def proxy_factory():
                     for item in input_ready:
                         try:
                             data = item.recv(8192)
-                        except ConnectionResetError:
+                        except (ConnectionResetError, ConnectionAbortedError):
                             print('Connection {}: Closed by peer'.format(outer_conn.fileno()))
                             return
                         if data:
@@ -78,19 +79,14 @@ def proxy_factory():
                                 local_conn = outer_conn
                             local_conn.send(data)
                         else:
-                            if socket_idle < 10:
+                            if socket_idle < self.socket_timeout:
                                 sleep(1)
                                 socket_idle += 1
                                 print('Connection {}: Waiting for data'.format(outer_conn.fileno()))
                             else:
                                 return
                 else:
-                    if socket_idle < 10:
-                        sleep(1)
-                        socket_idle += 1
-                        print('Connection {}: Waiting for connection'.format(outer_conn.fileno()))
-                    else:
-                        return
+                    return
 
         def do_HEAD(self):
             self.send_headers_ok()
@@ -113,7 +109,11 @@ def proxy_factory():
             data = self.get_data()
             if data:
                 self.send_headers_ok()
-                print('Incoming data: "{}"'.format(data.decode()))
+                try:
+                    data_to_print = data.decode()
+                except UnicodeDecodeError:
+                    data_to_print = data
+                print('Incoming data: "{}"'.format(data_to_print))
             else:
                 self.send_header('Empty data', 204)
 
@@ -159,8 +159,8 @@ class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
 class Proxy:
     def __init__(self):
-        self.port = 1234
         self.base_url = 'localhost'
+        self.port = 1234
         while True:
             try:
                 self.server = ThreadedTCPServer((self.base_url, self.port), proxy_factory())
